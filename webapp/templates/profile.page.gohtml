@@ -1,0 +1,29 @@
+{{ template  "base" .}}
+
+{{define "content"}}
+  <div class="container">
+    <div class="row">
+      <div class="col">
+        <h1 class="mt-3">User Profile</h1>
+        <hr>
+
+
+          {{/* decide whether or not to dispaly profile pic*/}}
+          {{if ne .User.ProfilePic.FileName ""}}
+            <img src="/static/img/{{.User.ProfilePic.FileName}}" alt="Profile" style="max-width: 300px;"
+                 class="img-fluid">
+          {{else}}
+            <p>No profile image uploaded yet...</p>
+          {{end}}
+        <hr>
+        <form action="/user/upload-profile-pic" method="post" enctype="multipart/form-data">
+          <label for="formFile" class="form label">Chose an image</label>
+          <input type="file" class="form-control" name="image" id="formFile" accept="image/gif,image/jpeg,image/png">
+          <input type="submit" value="Upload" class="btn btn-primary mt-3">
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+{{end}}

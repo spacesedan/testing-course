@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JWT Test</title>
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+  <!-- CSS only -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+
+  <style>
+
+      pre {
+          font-size: 9pt;
+
+      }
+
+      label {
+          font-weight: bold;
+      }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <div class="row">
+    <div class="col ">
+      <form id="login-form" autocomplete="off">
+        <h1 class="mt-3">Login</h1>
+        <hr>
+        <div class="mb-3">
+          <label for="email" class="form-label">Email address</label>
+          <input type="email" class="form-control" required name="email" id="email"
+                 autocomplete="email-new">
+        </div>
+        <div class="mb-3">
+          <label for="password" class="form-label">Password</label>
+          <input type="password" class="form-control" required name="password" id="password"
+                 autocomplete="password-new">
+        </div>
+        <a class="btn btn-primary" id="login">Login</a>
+      </form>
+      <hr>
+      <div id="tokens" class="d-none">
+        <h4>JWT Token</h4>
+        <pre id="token"></pre>
+        <hr>
+        <h4>Refresh Token</h4>
+        <pre id="refresh"></pre>
+      </div>
+      <hr>
+      <a href="javascript:void(0);" id="getUserBtn" class="btn btn-outline-secondary">Get User ID 1</a>
+      <br>
+      <div class="mt-2" style="outline: 1px solid silver; padding: 1em;">
+        <pre id="user-output">Nothing from server yet...</pre>
+      </div>
+      <hr>
+      <a id="logout" class="btn btn-danger" href="javascript:void(0)">Logout</a>
+    </div>
+  </div>
+</div>
+
+<script>
+    // we store our access token in memory - the only safe place
+    let accessToken = ""
+    let refreshToken = ""
+
+
+    // get references to UI elements
+    let loginForm = document.getElementById("login-form")
+    let loginBtn = document.getElementById("login")
+    let userBtn = document.getElementById("getUserBtn")
+    let userOutput = document.getElementById("user-output")
+    let tokensDiv = document.getElementById("tokens")
+    let tokenDisplay = document.getElementById("token")
+    let logoutBtn = document.getElementById("logout")
+    let refreshTokenDisplay = document.getElementById("refresh")
+
+
+    // events
+    document.addEventListener("DOMContentLoaded", () => {
+        // call refreshTokens; this will by default, log the user in
+        // if they have a valid, non-expired __Host-refresh_token cookie
+        refreshTokens()
+    })
+
+
+    loginBtn.addEventListener("click", () => {
+        const payload = {
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value
+        }
+
+        const requestOptions = {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        }
+
+        fetch(`/web/auth`, requestOptions)
+            .then(res => res.json())
+            .then(data => {
+                if (data.access_token) {
+                    accessToken = data.access_token
+                    refreshToken = data.refresh_token
+                    setUI(true)
+                    autoRefresh()
+                }
+            })
+            .catch(err => {
+                alert(err)
+            })
+    })
+
+    userBtn.addEventListener("click", () => {
+        const myHeaders= new Headers()
+        myHeaders.append("Content-Type", "application/json")
+        myHeaders.append("Authorization", `Bearer ${accessToken}`)
+
+
+        const requestOptions = {
+            method: "GET",
+            headers: myHeaders
+        }
+
+        fetch("/users/1", requestOptions)
+            .then(res => res.json())
+            .then(data => {
+                if (data) {
+                    userOutput.innerHTML = JSON.stringify(data, undefined, 4)
+                }
+            })
+            .catch(err => {
+                userOutput.innerHTML = "Log in first!"
+                console.log(err)
+            })
+    })
+
+    logoutBtn.addEventListener("click", () => {
+        accessToken = ""
+        refreshToken = ""
+
+        fetch("/web/logout", {method: "GET"})
+            .then(res => {
+                setUI(false)
+            })
+            .catch(err => {
+                userOutput.innerHTML = err
+            })
+    })
+
+    // methods
+    let refreshRunning = false
+    let refreshTime = new Date()
+    let secondsRemaining = (600 - refreshTime.getSeconds()) * 1000 // every 10 minutes
+    // let secondsRemaining = (5 - refreshTime.getSeconds()) * 1000 // every 10 minutes
+    const autoRefresh = () => {
+        if (!refreshRunning) {
+            setTimeout(() => {
+                if (accessToken !== "") {
+                    setInterval(refreshTokens, 10 * 60 *1000)
+                    // setInterval(refreshTokens, 5 *1000)
+                }
+            }, secondsRemaining)
+        }
+        refreshRunning = true
+    }
+
+    const refreshTokens = () => {
+        // we'll send a get request which includes the __Host-refresh_token cookie if it exists
+        const requestOptions = {
+            method: "GET",
+            credentials: "include"
+        }
+
+        fetch("/web/refresh-token", requestOptions)
+            .then(res => res.json())
+            .then(data => {
+                if (data.access_token) {
+                    accessToken = data.access_token
+                    refreshToken = data.refresh_token
+                    setUI(true)
+                    autoRefresh()
+                } else {
+                    setUI(false)
+                }
+            })
+            .catch(err => {
+                console.log("user is not logged in")
+            })
+    }
+
+    const setUI = (loggedIn) => {
+        if (loggedIn) {
+            tokensDiv.classList.remove("d-none")
+            loginForm.classList.add("d-none")
+            logoutBtn.classList.remove("d-none")
+            tokenDisplay.innerHTML = accessToken
+            refreshTokenDisplay.innerHTML = refreshToken
+        } else {
+            tokensDiv.classList.add("d-none")
+            loginForm.classList.remove("d-none")
+            logoutBtn.classList.add("d-none")
+            document.getElementById("password").value = ""
+            userOutput.innerHTML = "Nothing from server yet..."
+            tokenDisplay.innerHTML = "No Token!"
+            refreshTokenDisplay.innerHTML = "No Refresh Token!"
+        }
+    }
+
+</script>
+
+</body>
+
+</html>
